@@ -1,0 +1,21 @@
+{
+  "name": "redchat",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "author": "Yuri Andri Gani",
+  "license": "ISC",
+  "description": "",
+  "type": "commonjs",
+  "types": "dist/types/index.d.ts",
+  "dependencies": {
+    "redis": "^4.7.0",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

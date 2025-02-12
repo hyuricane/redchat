@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es6", // or whichever ECMAScript version you're targeting
+    "module": "commonjs", // or the module system you're using
+    "outDir": "./dist", // directory for compiled JavaScript files
+    "rootDir": "./src", // where your TypeScript files are located
+    "declaration": true, // This is key for generating .d.ts files
+    "declarationDir": "./dist/types", // Optionally specify where to put the d.ts files
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts"
+  ]
+}
