@@ -1,0 +1,53 @@
+<div id="messages" style="width: 100%; height=auto;">
+  </div>
+  <form id="chat-form" style="display: flex; justify-content: flex-end">
+    <input type="text" name="message" required>
+    <button type="submit">send</button>
+  </form>
+  <script data-room="{{name}}" data-user="{{user}}" data-user-id="{{userId}}">
+    const messagesContainer = document.getElementById('messages')
+    const chatForm = document.getElementById('chat-form')
+    
+    const room = document.currentScript.getAttribute('data-room')
+    const user = document.currentScript.getAttribute('data-user')
+    const userId = document.currentScript.getAttribute('data-user-id')
+
+    chatForm.onsubmit = async (e) => {
+      e.preventDefault()
+      const data = new FormData(chatForm)
+      const message = data.get('message')
+      const resp = await fetch('/_/room/'+room, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({message})
+      })
+      displayMessage(user, message, true)
+      chatForm.reset()
+    }
+
+    function displayMessage(user, message, fromSelf) {
+      const messageCnt = document.createElement('span')
+      if (fromSelf) {
+        messageCnt.style = 'display: block; direction: rtl;'
+        messageCnt.innerHTML = message + ' :' + user
+      } else {
+        messageCnt.style = 'display: block; direction: ltr;'
+        messageCnt.innerHTML = user + ': ' + message
+      }
+      messagesContainer.appendChild(messageCnt)
+    }
+
+    let sseSource = new EventSource('/_/room/'+room, {
+      withCredentials: true
+    })
+    sseSource.onmessage = (sseEvent) => {
+      console.log('[DEBUG] sse event', sseEvent)
+      switch (sseEvent.type) {
+        case 'message': 
+          const p = JSON.parse(sseEvent.data)
+          displayMessage(p.user.name, p.data, p.user.id == userId)
+      }
+    }
+  </script>
