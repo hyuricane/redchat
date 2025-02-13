@@ -120,7 +120,7 @@ app.get('/_/room/:name', authMiddleware, async (req, res) => {
     })
   })
   req.on('close', () => {
-    // room.leave()
+    agent.leave(room.name)
     clearInterval(interval)
     res.end()
   })

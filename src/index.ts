@@ -92,15 +92,35 @@ export class RedChat {
       room.members.push(user.id)
     }
     if (typeof listener === 'function') {
-      this.sub.subscribe(`${this.prefix}:${room.name}:chan`, (data) => {
+      const subfn = (data: string) => {
         const msg: ChatMessage = JSON.parse(data)
         if (msg.user.id == user.id) {
           return
         }
         listener(msg)
-      })
+      }
+      const unsubfn = (id: string) => {
+        if (id !== user.id) {
+          return
+        }
+        this.sub.unsubscribe(`${this.prefix}:${room.name}:chan`, subfn)
+        this.sub.unsubscribe(`${this.prefix}:${room.name}:leavechan`, unsubfn)
+      }
+      this.sub.subscribe(`${this.prefix}:${room.name}:chan`, subfn)
+      this.sub.subscribe(`${this.prefix}:${room.name}:leavechan`, unsubfn)
     }
     return room
+  }
+
+  async leave(name: string, user: User) {
+    let roomjson = await this.client.get(`${this.prefix}:${name}`)
+    if (!roomjson) {
+      throw new Error("Room not found")
+    }
+    const room = JSON.parse(roomjson)
+    await this.client.lRem(`${this.prefix}:${name}:members`, 0, user.id)
+    await this.pub.publish(`${this.prefix}:${name}:leavechan`, user.id)
+    return true
   }
 
   async sendMessage(name: string, user: User, message: string, password?: string): Promise<boolean> {
@@ -169,6 +189,10 @@ class Agent {
       password = ""
     }
     return this._redChat.join(room, this.user, listener, password)
+  }
+
+  async leave(room: string) {
+    return this._redChat.leave(room, this.user)
   }
 
   async sendMessage(room: string, message: string, password?: string): Promise<boolean> {
