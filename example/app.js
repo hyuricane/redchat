@@ -101,7 +101,7 @@ app.get('/_/room/:name', authMiddleware, async (req, res) => {
   const room = await agent.join(req.params.name, (msg) => {
     const { type, ...rest } = msg
     res.write(`event: ${type}\ndata: ${JSON.stringify(rest)}\n\n`)
-  })
+  }, 3600)
   // sse
   res.header('Content-Type', 'text/event-stream')
   res.header('Cache-Control', 'no-cache')

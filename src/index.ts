@@ -25,6 +25,7 @@ export type JoinOpts = {
 export type Room = {
   name: string
   members: string[]
+  expireEmptyDelays: number
 }
 
 export class RedChat {
@@ -71,17 +72,28 @@ export class RedChat {
     }
   }
 
-  async join (name: string, user: User, listener: (msg: ChatMessage) => void, password?: string): Promise<Room> {
+  async join (name: string, user: User, listener: (msg: ChatMessage) => void, password?: string, expireEmptyDelays?: number): Promise<Room> {
+    
+    if (typeof password === 'number') {
+      expireEmptyDelays = password
+      password = undefined
+    }
     let room: Room = {
       name,
       members: [],
+      expireEmptyDelays: expireEmptyDelays || 0,
+    }
+    if (!password) {
+      password = ""
     }
     let roomjson = await this.client.get(`${this.prefix}:${room.name}`)
     let roompass = ""
     if (!roomjson) {
-      this.client.set(`${this.prefix}:${room.name}`, JSON.stringify({pass: password}))
+      this.client.set(`${this.prefix}:${room.name}`, JSON.stringify({pass: password, expireEmptyDelays: room.expireEmptyDelays}))
     } else {
-      roompass = JSON.parse(roomjson)?.password
+      const roomObj = JSON.parse(roomjson)
+      roompass = roomObj.pass
+      room.expireEmptyDelays = roomObj.expireEmptyDelays
       if (roompass && roompass !== password) {
         throw new Error("Invalid password")
       }
@@ -105,10 +117,27 @@ export class RedChat {
         }
         this.sub.unsubscribe(`${this.prefix}:${room.name}:chan`, subfn)
         this.sub.unsubscribe(`${this.prefix}:${room.name}:leavechan`, unsubfn)
+
+        // if members count is 0, initiate expiring
+        this.client.exists(`${this.prefix}:${room.name}:members`).then((exists) => {
+          if (exists) {
+            return
+          }
+          if (room.expireEmptyDelays > -1) { // else the room is permanent
+            this.client.expire(`${this.prefix}:${room.name}`, room.expireEmptyDelays)
+            this.client.expire(`${this.prefix}:${room.name}:messages`, room.expireEmptyDelays)
+          }
+        })
       }
       this.sub.subscribe(`${this.prefix}:${room.name}:chan`, subfn)
       this.sub.subscribe(`${this.prefix}:${room.name}:leavechan`, unsubfn)
     }
+    // remove TTLs
+    this.client.multi()
+      .persist(`${this.prefix}:${room.name}`)
+      .persist(`${this.prefix}:${room.name}:messages`)
+      .persist(`${this.prefix}:${room.name}:members`)
+      .exec()
     return room
   }
 
@@ -184,11 +213,15 @@ class Agent {
     return this.user.name
   }
 
-  async join(room: string, listener: (msg: ChatMessage) => void, password?: string) {
+  async join(room: string, listener: (msg: ChatMessage) => void, password?: string, expireEmptyDelays?: number) {
+    if (typeof password === 'number') {
+      expireEmptyDelays = password
+      password = undefined
+    }
     if (!password) {
       password = ""
     }
-    return this._redChat.join(room, this.user, listener, password)
+    return this._redChat.join(room, this.user, listener, password, expireEmptyDelays)
   }
 
   async leave(room: string) {
