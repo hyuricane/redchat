@@ -12,6 +12,7 @@ export type ChatMessage = {
 export type RedChatOpts = {
   client: RedisClientType | URL
   prefix: string
+  historyLimit?: number
 }
 
 export type JoinOpts = {
@@ -32,6 +33,9 @@ export class RedChat {
   pub: RedisClientType
   sub: RedisClientType
 
+  historyLimit: number = 1000
+
+
   constructor(opts: RedChatOpts) {
     const { client, prefix } = opts
     if (client instanceof URL) {
@@ -40,6 +44,7 @@ export class RedChat {
       this.client = client
     }
     this.prefix = prefix
+    this.historyLimit = opts.historyLimit || this.historyLimit
     
     this.pub = this.client.duplicate()
     this.sub = this.client.duplicate()
@@ -82,7 +87,6 @@ export class RedChat {
       }
     }
     room.members = await this.client.lRange(`${this.prefix}:${room.name}:members`, 0, -1)
-    console.log('[DEBUG] listing members', room.members)
     if (room.members.indexOf(user.id) === -1) {
       await this.client.lPush(`${this.prefix}:${room.name}:members`, user.id)
       room.members.push(user.id)
@@ -119,7 +123,19 @@ export class RedChat {
       data: message,
     }
     await this.pub.publish(`${this.prefix}:${name}:chan`, JSON.stringify(msg))
+
+    // store to message history, limit to historyLimit
+    await this.client.multi()
+      .lPush(`${this.prefix}:${name}:messages`, JSON.stringify(msg))
+      .lTrim(`${this.prefix}:${name}:messages`, 0, this.historyLimit -1)
+      .exec()
+
     return true
+  }
+
+  async getMessages(name: string, limit: number = 100): Promise<ChatMessage[]> {
+    const messages = await this.client.lRange(`${this.prefix}:${name}:messages`, 0, limit -1)
+    return messages.map((msg: string): ChatMessage => JSON.parse(msg)).reverse()
   }
 
   async createAgent(id: string, name: string): Promise<Agent> {
@@ -157,5 +173,9 @@ class Agent {
 
   async sendMessage(room: string, message: string, password?: string): Promise<boolean> {
     return this._redChat.sendMessage(room, this.user, message, password)
+  }
+
+  async getMessages(room: string, limit: number = 100): Promise<ChatMessage[]> {
+    return this._redChat.getMessages(room, limit)
   }
 }

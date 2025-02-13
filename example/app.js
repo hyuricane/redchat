@@ -10,7 +10,9 @@ const { RedChat } = require('../')
 
 const redchat = new RedChat({
   client: new URL(process.env.REDIS_URL || 'redis://localhost:6379'),
-  prefix: 'redchat'
+  prefix: 'redchat',
+
+  historyLimit: 10
 })
 
 const app = new express()
@@ -98,8 +100,7 @@ app.get('/_/room/:name', authMiddleware, async (req, res) => {
   const agent = await redchat.createAgent(id, req.session.name)
   const room = await agent.join(req.params.name, (msg) => {
     const { type, ...rest } = msg
-    res.write(`event: ${type}\n`)
-    res.write(`data: ${JSON.stringify(rest)}\n\n`)
+    res.write(`event: ${type}\ndata: ${JSON.stringify(rest)}\n\n`)
   })
   // sse
   res.header('Content-Type', 'text/event-stream')
@@ -110,6 +111,14 @@ app.get('/_/room/:name', authMiddleware, async (req, res) => {
   const interval = setInterval(() => {
     res.write(': keepalive\n\n')
   }, 30000);
+
+  // send chat histories
+  agent.getMessages(room.name, 5).then(messages => {
+    messages.forEach(msg => {
+      const { type, ...rest } = msg
+      res.write(`event: ${type}\ndata: ${JSON.stringify(rest)}\n\n`)
+    })
+  })
   req.on('close', () => {
     // room.leave()
     clearInterval(interval)
